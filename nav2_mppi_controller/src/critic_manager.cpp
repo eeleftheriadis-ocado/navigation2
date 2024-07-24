@@ -71,7 +71,53 @@ void CriticManager::evalTrajectoriesScores(
     if (data.fail_flag) {
       break;
     }
+
+    xt::xtensor<float, 1> prev_costs = data.costs;
     critics_[q]->score(data);
+    std::string critic_name = critics_[q]->getName();
+    if (critics_[q]->critic_cost_visualization_publisher_->get_subscription_count() > 0)
+    {
+      critics_[q]->critic_cost_visualization_publisher_->on_activate();
+      xt::xtensor<float, 1> critic_costs = data.costs - prev_costs;
+      visualization_msgs::msg::MarkerArray vis_msg;
+      const models::Trajectories & traj = data.trajectories;
+      int pos = critic_name.find(std::string("."));
+      std::string critic_subname = critic_name.substr(pos + 1, critic_name.length());
+      int marker_id = 0;
+
+      auto & shape = traj.x.shape();
+      int trajectory_step = 80;
+      int time_step = 3;
+      for (size_t i = 0; i < shape[0]; i += trajectory_step) {
+          for (size_t j = 0; j < shape[1]; j += time_step) {
+
+            auto pose = utils::createPose(traj.x(i, j), traj.y(i, j), 0.03);
+            auto scale = utils::createScale(0.05, 0.05, 0.05);
+
+
+            float red_component = critic_costs(i) / (1 + critic_costs(i));
+            float green_component = 1 / (1 + critic_costs(i));
+            auto color = utils::createColor(red_component, green_component, 0, 1);
+
+            
+            visualization_msgs::msg::Marker marker;
+            marker.header.frame_id = "odom";
+            marker.header.stamp = rclcpp::Time(0, 0);
+            marker.ns = "crtics_trajectories";
+            marker.id = marker_id;
+            marker.type = visualization_msgs::msg::Marker::SPHERE;
+            marker.action = visualization_msgs::msg::Marker::ADD;
+
+            marker.pose = pose;
+            marker.scale = scale;
+            marker.color = color;
+            vis_msg.markers.push_back(marker);
+            marker_id += 1;
+          }
+      }
+      critics_[q]->critic_cost_visualization_publisher_->publish(vis_msg);
+      critics_[q]->critic_cost_visualization_publisher_->on_deactivate();
+    }
   }
 }
 

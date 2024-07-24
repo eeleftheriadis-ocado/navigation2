@@ -17,9 +17,12 @@
 
 #include <string>
 #include <memory>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
+
 
 #include "nav2_mppi_controller/tools/parameters_handler.hpp"
 #include "nav2_mppi_controller/critic_data.hpp"
@@ -70,7 +73,8 @@ public:
     ParametersHandler * param_handler)
   {
     parent_ = parent;
-    logger_ = parent_.lock()->get_logger();
+    auto node = parent_.lock();
+    logger_ = node->get_logger();
     name_ = name;
     parent_name_ = parent_name;
     costmap_ros_ = costmap_ros;
@@ -79,6 +83,12 @@ public:
 
     auto getParam = parameters_handler_->getParamGetter(name_);
     getParam(enabled_, "enabled", true);
+    int pos = name_.find(std::string("."));
+    std::string critic_name = name_.substr(pos + 1, name_.length());
+    RCLCPP_INFO(logger_, "The name of the critic is  : %s", name_.c_str());
+    RCLCPP_INFO(logger_, "The name of the critic publisher is : /critic_%s", critic_name.c_str());
+    critic_cost_visualization_publisher_ =
+      node->create_publisher<visualization_msgs::msg::MarkerArray>("/critic_" + critic_name, 1);
 
     initialize();
   }
@@ -101,6 +111,8 @@ public:
   {
     return name_;
   }
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>>
+    critic_cost_visualization_publisher_;
 
 protected:
   bool enabled_;
@@ -110,6 +122,7 @@ protected:
   nav2_costmap_2d::Costmap2D * costmap_{nullptr};
 
   ParametersHandler * parameters_handler_;
+  
   rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
 };
 
